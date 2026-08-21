@@ -1,0 +1,14 @@
+# Backend
+venv/
+__pycache__/
+*.sqlite3
+.pytest_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+
+# IDEs and OS
+.idea/
+.vscode/
+.DS_Store
