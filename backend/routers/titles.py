@@ -80,7 +80,7 @@ def get_title_detail(title_id: str, db: Session = Depends(get_db)):
         .group_by(models.Format.format_type)
         .all()
     )
-
+    # return now the details along with a list of formats
     return {
         "title_id": title.title_id,
         "name": title.name,
