@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 import json
 
@@ -52,7 +53,7 @@ def get_all_titles(name: Optional[str] = None, db: Session = Depends(get_db)):
         query = query.filter(models.Title.name.ilike(f"%{name}%"))
     return query.all()
 
-@router.get("/{title_id}", response_model=schemas.TitleDetails, status_code=status.HTTP_200_OK)
+@router.get("/{title_id}", response_model=schemas.TitleDetailResponse, status_code=status.HTTP_200_OK)
 def get_title_detail(title_id: str, db: Session = Depends(get_db)):
 
     title = db.query(models.Title).filter(
@@ -68,10 +69,22 @@ def get_title_detail(title_id: str, db: Session = Depends(get_db)):
         models.Format.title_id == title_id
     ).count()
 
+    # 2. Group items by format and count
+    format_counts = (
+        db.query(
+            models.Format.format_type.label("format"),
+            func.count(models.LibraryItem.format_id).label("count")  # or whatever primary key LibraryItem uses
+        )
+        .join(models.LibraryItem, models.LibraryItem.format_id == models.Format.format_id)
+        .filter(models.Format.title_id == title_id)
+        .group_by(models.Format.format_type)
+        .all()
+    )
+
     return {
-        "title_id": title_id,
+        "title_id": title.title_id,
         "name": title.name,
         "description": title.description,
         "genre": title.genre,
-        "totalNoOfItems": totalNoOfItems
+        "formats": [{"format": fc.format, "count": fc.count} for fc in format_counts]
     }

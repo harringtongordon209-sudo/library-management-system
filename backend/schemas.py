@@ -112,3 +112,17 @@ class CheckoutNestedResponse(BaseModel):
     dueDate: date
     returnDate: Optional[date] = None
     item: ItemDetails
+
+class FormatCount(BaseModel):
+    format: str
+    count: int
+
+class TitleDetailResponse(BaseModel):
+    title_id: str
+    name: str
+    description: str | None = None
+    genre: str | None = None
+    formats: List[FormatCount]
+
+    class Config:
+        from_attributes = True
