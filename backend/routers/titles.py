@@ -1,0 +1,77 @@
+from fastapi import APIRouter, Depends, HTTPException, Header, status
+from sqlalchemy.orm import Session
+from typing import List, Optional
+import json
+
+import models, schemas
+from database import get_db, redis_client
+
+router = APIRouter(prefix="/api/titles", tags=["Titles"])
+
+@router.post("", response_model=schemas.TitleResponse, status_code=status.HTTP_201_CREATED)
+def create_title(title_data: schemas.TitleCreate, db: Session = Depends(get_db),
+                 idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),):
+
+    if idempotency_key:
+        cached_response = redis_client.get(idempotency_key)
+        if cached_response:
+            if cached_response == "processing":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request is currently processing")
+            return json.loads(cached_response)
+        is_new = redis_client.set(idempotency_key, "processing", nx=True, ex=3600)
+
+        if not is_new:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request is currently processing")
+
+    new_title = models.Title(
+        name=title_data.name,
+        description=title_data.description,
+        genre=title_data.genre
+    )
+
+    db.add(new_title)
+    db.commit()
+    db.refresh(new_title)
+
+    if idempotency_key:
+        response_data = {
+            "title_id": new_title.title_id,
+            "name": new_title.name,
+            "description": new_title.description,
+            "genre": new_title.genre
+        }
+        redis_client.set(idempotency_key, json.dumps(response_data), ex=86400)
+
+    return new_title
+
+@router.get("", response_model=List[schemas.TitleSummary], status_code=status.HTTP_200_OK)
+def get_all_titles(name: Optional[str] = None, db: Session = Depends(get_db)):
+
+    query = db.query(models.Title)
+    if name:
+        query = query.filter(models.Title.name.ilike(f"%{name}%"))
+    return query.all()
+
+@router.get("/{title_id}", response_model=schemas.TitleDetails, status_code=status.HTTP_200_OK)
+def get_title_detail(title_id: str, db: Session = Depends(get_db)):
+
+    title = db.query(models.Title).filter(
+        models.Title.title_id == title_id
+    ).first()
+
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+
+    totalNoOfItems = db.query(models.LibraryItem).join(
+        models.Format, models.LibraryItem.format_id == models.Format.format_id
+    ).filter(
+        models.Format.title_id == title_id
+    ).count()
+
+    return {
+        "title_id": title_id,
+        "name": title.name,
+        "description": title.description,
+        "genre": title.genre,
+        "totalNoOfItems": totalNoOfItems
+    }

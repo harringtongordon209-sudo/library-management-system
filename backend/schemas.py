@@ -19,6 +19,17 @@ class TitleResponse(TitleCreate):
 class TitleSummary(BaseModel):
     title_id: str
     name: str
+    genre: str
+
+    class Config:
+        from_attributes = True
+
+class TitleDetails(BaseModel):
+    title_id: str
+    name: str
+    description: str
+    genre: str
+    totalNoOfItems: int
 
     class Config:
         from_attributes = True
@@ -99,4 +110,5 @@ class CheckoutNestedResponse(BaseModel):
     id: str
     startDate: date
     dueDate: date
+    returnDate: Optional[date] = None
     item: ItemDetails
