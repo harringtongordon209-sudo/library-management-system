@@ -11,12 +11,31 @@ from database import get_db, redis_client # Import redis_client from database!
 router = APIRouter(prefix="/api/borrowers", tags=["Borrowers"])
 
 @router.post("", response_model=schemas.BorrowerResponse, status_code=status.HTTP_201_CREATED)
-def create_borrower(borrower_data: schemas.BorrowerCreate, db: Session = Depends(get_db)):
+def create_borrower(borrower_data: schemas.BorrowerCreate, db: Session = Depends(get_db),
+                    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),):
+    if idempotency_key:
+        cached_response = redis_client.get(idempotency_key)
+        if cached_response:
+            if cached_response == "processing":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request is currently processing")
+            return json.loads(cached_response)
+        is_new = redis_client.set(idempotency_key, "processing", nx=True, ex=3600)
+
+        if not is_new:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request is currently processing")
+
     new_borrower = models.Borrower(name=borrower_data.name)
 
     db.add(new_borrower)
     db.commit()
     db.refresh(new_borrower)
+
+    if idempotency_key:
+        response_data = {
+            "borrower_id": new_borrower.borrower_id,
+            "name": new_borrower.name
+        }
+        redis_client.set(idempotency_key, json.dumps(response_data), ex=86400)
 
     return new_borrower
 

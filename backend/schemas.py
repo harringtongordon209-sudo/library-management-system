@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import date # <-- New import for handling checkout dates
+from datetime import date, time # <-- New import for handling checkout dates
 
 # -------------------------------------
 # 1. TITLE SCHEMAS
@@ -47,6 +47,30 @@ class BookCreate(BaseModel):
 class BookResponse(BookCreate):
     format_id: str
     format_type: str # This will automatically say "book" from SQLAlchemy
+
+    class Config:
+        from_attributes = True
+
+class DvdCreate(BaseModel):
+    title_id: str
+    director: str
+    runtime: time
+
+class DvdResponse(BookCreate):
+    format_id: str
+    format_type: str # This will automatically say "Dvd" from SQLAlchemy
+
+    class Config:
+        from_attributes = True
+
+class AudioBookCreate(BaseModel):
+    title_id: str
+    narrator: str
+    runtime: time
+
+class AudioBookResponse(BookCreate):
+    format_id: str
+    format_type: str # This will automatically say "Dvd" from SQLAlchemy
 
     class Config:
         from_attributes = True
