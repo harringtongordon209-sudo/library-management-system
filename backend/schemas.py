@@ -40,16 +40,20 @@ class TitleDetails(BaseModel):
 # We will start with a schema specifically for creating a Book.
 # You can easily duplicate this pattern for Movie and Audiobook later!
 class BookCreate(BaseModel):
-    title_id: str
     author: str
     number_of_pages: int
+    number_of_copies: int
 
-class BookResponse(BookCreate):
+class BookResponse(BaseModel):
+    title_id: str
     format_id: str
-    format_type: str # This will automatically say "book" from SQLAlchemy
+    author: str
+    number_of_pages: int
+    created_serial_numbers: List[str]
 
     class Config:
         from_attributes = True
+
 
 class DvdCreate(BaseModel):
     title_id: str

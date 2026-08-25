@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -45,6 +47,59 @@ def create_title(title_data: schemas.TitleCreate, db: Session = Depends(get_db),
 
     return new_title
 
+@router.post("/{title_id}/book", response_model=schemas.BookResponse, status_code=status.HTTP_200_OK)
+def create_book_copies(
+        title_id: str,
+        book_data: schemas.BookCreate,
+        db: Session = Depends(get_db),
+):
+    # Verify the title exists
+    title = db.query(models.Title).filter(models.Title.title_id == title_id).first()
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+
+    # 2. Save Book metadata (Assuming you have a Book model linked to Title)
+    # If author and number_of_pages are just fields on the Title model,
+    # you would update the Title object here instead.
+    new_book = models.Book(
+        title_id=title_id,
+        author=book_data.author,
+        number_of_pages=book_data.number_of_pages,
+    )
+    db.add(new_book)
+    db.commit()
+    db.refresh(new_book)
+
+    # 3. Create the specified number of Item copies
+    created_items = []
+    for _ in range(book_data.number_of_copies):
+        # Generate a serial number. If your DB auto-increments this,
+        # you can omit it and retrieve it after db.commit()
+        new_serial = str(uuid.uuid4())
+
+        new_library_item = models.LibraryItem(
+            serial_no=new_serial,
+            format_id=new_book.format_id,
+        )
+        db.add(new_library_item)
+        created_items.append(new_library_item)
+    # 4. Commit all changes to the database at once
+    db.commit()
+
+    # 5. Extract the serial numbers from the created items
+    serial_numbers = [library_item.serial_no for library_item in created_items]
+
+    return schemas.BookResponse(
+        title_id=title_id,
+        format_id=new_book.format_id,
+        author=book_data.author,
+        number_of_pages=book_data.number_of_pages,
+        created_serial_numbers=serial_numbers
+    )
+
+
+
+
 @router.get("", response_model=List[schemas.TitleSummary], status_code=status.HTTP_200_OK)
 def get_all_titles(name: Optional[str] = None, db: Session = Depends(get_db)):
 
@@ -62,12 +117,6 @@ def get_title_detail(title_id: str, db: Session = Depends(get_db)):
 
     if not title:
         raise HTTPException(status_code=404, detail="Title not found")
-
-    totalNoOfItems = db.query(models.LibraryItem).join(
-        models.Format, models.LibraryItem.format_id == models.Format.format_id
-    ).filter(
-        models.Format.title_id == title_id
-    ).count()
 
     # 2. Group items by format and count
     format_counts = (
