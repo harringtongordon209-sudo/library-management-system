@@ -52,7 +52,20 @@ def create_book_copies(
         title_id: str,
         book_data: schemas.BookCreate,
         db: Session = Depends(get_db),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
+
+    if idempotency_key:
+        cached_response = redis_client.get(idempotency_key)
+        if cached_response:
+            if cached_response == "processing":
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request is currently processing")
+            return json.loads(cached_response)
+        is_new = redis_client.set(idempotency_key, "processing", nx=True, ex=3600)
+
+        if not is_new:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request is currently processing")
+
     # Verify the title exists
     title = db.query(models.Title).filter(models.Title.title_id == title_id).first()
     if not title:
@@ -89,13 +102,18 @@ def create_book_copies(
     # 5. Extract the serial numbers from the created items
     serial_numbers = [library_item.serial_no for library_item in created_items]
 
-    return schemas.BookResponse(
+    response_data = schemas.BookResponse(
         title_id=title_id,
         format_id=new_book.format_id,
         author=book_data.author,
         number_of_pages=book_data.number_of_pages,
         created_serial_numbers=serial_numbers
     )
+
+    if idempotency_key:
+        redis_client.set(idempotency_key, response_data.model_dump_json(), ex=86400)
+
+    return response_data
 
 
 
