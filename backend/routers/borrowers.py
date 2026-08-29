@@ -47,7 +47,7 @@ def get_all_borrowers(name: Optional[str] = None, db: Session = Depends(get_db))
     return query.all()
 
 
-@router.patch("/{borrower_id}/checkoutRecords/{checkout_id}", response_model=schemas.BorrowerResponse,status_code=status.HTTP_200_OK)
+@router.patch("/{borrower_id}/checkoutRecords/{checkout_id}", response_model=schemas.CheckoutNestedResponse,status_code=status.HTTP_200_OK)
 def checkin_item(
     borrower_id: str,
     checkout_id: str,
@@ -69,6 +69,7 @@ def checkin_item(
     if checkout_record.return_date is not None:
         raise HTTPException(status_code=400, detail="This Item has already been checked in")
 
+
     # Update the return date to todays date
 
     checkout_record.return_date = date.today()
@@ -83,13 +84,13 @@ def checkin_item(
     ).first()
 
     return {
-        "id": checkout_record.checkout_id,
+        "checkout_id": checkout_record.checkout_id,
         "startDate": checkout_record.check_out_date.isoformat(),
         "dueDate": checkout_record.due_date.isoformat(),
         "returnDate": checkout_record.return_date.isoformat(),
         "item": {
-            "id": library_item.format_id,
-            "name": library_item.format.title.name,
+            "id": library_item.format_id,  # Linking the format ID
+            "name": library_item.format.title.name,  # Using SQLAlchemy relationships to get the name
             "barcode": library_item.serial_no
         }
     }
@@ -114,6 +115,13 @@ def checkout_item_nested(
         if not is_new:
             raise HTTPException(status_code=409, detail="Request is processing")
 
+    borrower_record = db.query(models.Borrower).filter(
+        models.Borrower.borrower_id == borrower_id
+    ).first()
+    print(borrower_record)
+    if not borrower_record:
+        raise HTTPException(status_code=400, detail="Borrower does not exist!")
+
     # 2. Extract the item ID from the nested request body
     item_id = checkout_data.item.id
 
@@ -122,6 +130,7 @@ def checkout_item_nested(
         models.CheckoutRecord.item_serial_no == item_id,
         models.CheckoutRecord.return_date == None
     ).first()
+    print("got here")
 
     if active_checkout:
         raise HTTPException(status_code=400, detail="Item is already checked out!")
@@ -148,7 +157,7 @@ def checkout_item_nested(
 
     # 7. Construct the exact nested response you requested
     response_data = {
-        "id": new_checkout.checkout_id,
+        "checkout_id": new_checkout.checkout_id,
         "startDate": new_checkout.check_out_date.isoformat(),
         "dueDate": new_checkout.due_date.isoformat(),
         "item": {

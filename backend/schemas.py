@@ -55,26 +55,32 @@ class BookResponse(BaseModel):
         from_attributes = True
 
 
-class DvdCreate(BaseModel):
-    title_id: str
+class MovieCreate(BaseModel):
     director: str
-    runtime: time
+    runtime: int
+    number_of_copies: int
 
-class DvdResponse(BookCreate):
+class MovieResponse(BaseModel):
+    title_id: str
     format_id: str
-    format_type: str # This will automatically say "Dvd" from SQLAlchemy
+    director: str
+    runtime: int
+    created_serial_numbers: List[str]
 
     class Config:
         from_attributes = True
 
 class AudioBookCreate(BaseModel):
-    title_id: str
     narrator: str
-    runtime: time
+    runtime: int
+    number_of_copies: int
 
-class AudioBookResponse(BookCreate):
+class AudioBookResponse(BaseModel):
+    title_id: str
     format_id: str
-    format_type: str # This will automatically say "Dvd" from SQLAlchemy
+    narrator: str
+    runtime: int
+    created_serial_numbers: List[str]
 
     class Config:
         from_attributes = True
@@ -121,6 +127,21 @@ class CheckoutResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# -------------------------------------
+# 6. CHECKIN RECORD SCHEMAS
+# -------------------------------------
+
+class CheckinResponse(BaseModel):
+    checkout_id: str
+    item_serial_no: str
+    borrower_id: str
+    check_out_date: date
+    due_date: date
+    return_date: date
+
+    class Config:
+        from_attributes = True
+
 # --- NEW CHECKOUT REQUEST SCHEMAS ---
 class ItemReference(BaseModel):
     id: str
@@ -135,7 +156,7 @@ class ItemDetails(BaseModel):
     barcode: str
 
 class CheckoutNestedResponse(BaseModel):
-    id: str
+    checkout_id: str
     startDate: date
     dueDate: date
     returnDate: Optional[date] = None
