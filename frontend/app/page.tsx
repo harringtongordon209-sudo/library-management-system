@@ -1,6 +1,7 @@
 "use client"; // This tells Next.js we want to use interactive browser features
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 // This tells TypeScript what our data looks like (matches your FastAPI TitleSummary schema)
 type Title = {
@@ -9,41 +10,46 @@ type Title = {
 };
 
 export default function Home() {
-  // 1. Create a "state" variable to hold our books. It starts as an empty array [].
-  const [titles, setTitles] = useState<Title[]>([]);
+    return (
+        <main className="p-8">
+            <h1 className="text-2xl font-bold mb-6">Library Management System</h1>
 
-  // 2. useEffect runs automatically as soon as the page loads on the screen.
-  useEffect(() => {
-    // 3. Make the exact same GET request your Swagger UI makes
-    fetch("http://127.0.0.1:8000/api/titles")
-        .then((response) => response.json()) // Convert the response to JSON
-        .then((data) => setTitles(data))     // Save that data into our state variable
-        .catch((error) => console.error("Error fetching data:", error));
-  }, []);
+            <div className="flex flex-col gap-6">
 
-  // 4. Draw the actual webpage
-  return (
-      <main className="p-10 bg-gray-100 min-h-screen text-gray-800">
-        <h1 className="text-4xl font-bold text-blue-600 mb-8">Welcome to the Library System</h1>
+                {/* Titles Section */}
+                <div className="flex flex-row items-center gap-4">
+                    <Link
+                        href="/titles/view"
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 inline-block font-medium"
+                    >
+                        View Titles
+                    </Link>
+                    <Link
+                        href="/titles/create"
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 inline-block font-medium"
+                    >
+                        Create New Title
+                    </Link>
+                </div>
 
-        <div className="bg-white shadow rounded-lg p-6 max-w-2xl">
-          <h2 className="text-2xl font-semibold mb-4 border-b pb-2">Library Catalog</h2>
+                {/* Borrowers Section */}
+                <div className="flex flex-row items-center gap-4">
+                    <Link
+                        href="/borrowers/view"
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 inline-block font-medium"
+                    >
+                        View Borrowers
+                    </Link>
+                    <Link
+                        href="/borrowers/create"
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 inline-block font-medium"
+                    >
+                        Create New Borrower
+                    </Link>
+                </div>
 
-          <ul className="space-y-3">
-            {/* 5. Loop through our titles and create a list item for each one */}
-            {titles.map((title) => (
-                <li key={title.title_id} className="p-3 bg-gray-50 border rounded-md shadow-sm">
-                  <span className="font-medium">{title.name}</span>
-                  <span className="text-xs text-gray-400 block mt-1">ID: {title.title_id}</span>
-                </li>
-            ))}
+            </div>
+        </main>
 
-            {/* If the database is empty, show a helpful message */}
-            {titles.length === 0 && (
-                <p className="text-gray-500 italic">No books found. Add some via Swagger!</p>
-            )}
-          </ul>
-        </div>
-      </main>
-  );
+    );
 }
