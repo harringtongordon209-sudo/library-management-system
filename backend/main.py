@@ -9,7 +9,7 @@ from database import engine, get_db
 from datetime import date, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import borrowers, titles, items, formats
+from routers import borrowers, titles, items
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -27,8 +27,6 @@ redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=T
 app.include_router(borrowers.router)
 app.include_router(titles.router)
 app.include_router(items.router)
-
-app.include_router(formats.router)
 
 @app.get("/")
 def read_root():

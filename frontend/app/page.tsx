@@ -30,6 +30,12 @@ export default function Home() {
                     >
                         Create New Title
                     </Link>
+                    <Link
+                        href="/books/create"
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 inline-block font-medium"
+                    >
+                        Create New Book
+                    </Link>
                 </div>
 
                 {/* Borrowers Section */}
