@@ -36,6 +36,18 @@ export default function Home() {
                     >
                         Create New Book
                     </Link>
+                    <Link
+                        href="/movies/create"
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 inline-block font-medium"
+                    >
+                        Create New Movie
+                    </Link>
+                    <Link
+                        href="/audiobooks/create"
+                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 inline-block font-medium"
+                    >
+                        Create New Audiobook
+                    </Link>
                 </div>
 
                 {/* Borrowers Section */}
