@@ -175,3 +175,25 @@ class TitleDetailResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class FormatInfo(BaseModel):
+    format_id: str
+    format_type: str
+
+    class Config:
+        from_attributes = True
+
+class TitleFormatResponse(BaseModel):
+    title_id: str
+    name: str
+    format_types: List[FormatInfo]
+
+    class Config:
+        from_attributes = True
+
+class FormatItemsResponse(BaseModel):
+    format_id: str
+    items: List[str]
+
+    class Config:
+        from_attributes = True

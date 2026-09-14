@@ -297,3 +297,29 @@ def get_title_detail(title_id: str, db: Session = Depends(get_db)):
         "genre": title.genre,
         "formats": [{"format": fc.format, "count": fc.count} for fc in format_counts]
     }
+
+@router.get("/{title_id}/formats", response_model=schemas.TitleFormatResponse, status_code=status.HTTP_200_OK)
+def get_title_formats(title_id: str, db: Session = Depends(get_db)):
+
+    title = db.query(models.Title).filter(
+        models.Title.title_id == title_id
+    ).first()
+
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+
+    # 2. Group items by format and count
+    format_types = (
+        db.query(
+            models.Format.format_type.label("format_type"),
+            models.Format.format_id.label("format_id")
+        )
+        .filter(models.Format.title_id == title_id)
+        .all()
+    )
+    # return now the title_id along with a list of formats
+    return {
+        "title_id": title.title_id,
+        "name": title.name,
+        "format_types": [{"format_id": fc.format_id, "format_type": fc.format_type} for fc in format_types]
+    }
