@@ -172,3 +172,41 @@ def checkout_item_nested(
         redis_client.set(idempotency_key, json.dumps(response_data), ex=86400)
 
     return response_data
+
+@router.get("/{borrower_id}/checkoutRecords", response_model=List[schemas.CheckoutNestedResponse], status_code=status.HTTP_200_OK)
+def get_borrower_checkout_records(borrower_id: str, db: Session = Depends(get_db)):
+
+    borrower_record = db.query(models.Borrower).filter(
+        models.Borrower.borrower_id == borrower_id
+    ).first()
+    if not borrower_record:
+        raise HTTPException(status_code=400, detail="Borrower does not exist!")
+
+
+    checkout_records = \
+        (db.query
+        (models.CheckoutRecord, models.LibraryItem)
+        .join(models.LibraryItem, models.CheckoutRecord.item_serial_no == models.LibraryItem.serial_no)
+        .filter(models.CheckoutRecord.borrower_id == borrower_id)
+        .filter(models.CheckoutRecord.return_date.is_(None))
+        .all()
+        )
+
+
+    response_list = []
+
+    for checkout_record, library_item in checkout_records:
+
+        response_list.append({
+            "checkout_id": checkout_record.checkout_id,
+            "startDate": checkout_record.check_out_date.isoformat(),
+            "dueDate": checkout_record.due_date.isoformat(),
+            "returnDate": checkout_record.return_date.isoformat() if checkout_record.return_date else None,
+            "item": {
+                "id": library_item.format_id,
+                "name": library_item.format.title.name,
+                "barcode": library_item.serial_no
+            }
+        })
+
+    return response_list
