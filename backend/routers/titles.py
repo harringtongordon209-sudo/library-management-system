@@ -41,23 +41,29 @@ def create_title(title_data: schemas.TitleCreate, db: Session = Depends(get_db),
         if cached_result:
             return cached_result
 
-    # Find if the title already exists in the DB
-    title_record = db.query(models.Title).filter(
-        models.Title.name == title_data.name
-    ).first()
+    try:
+        # Find if the title already exists in the DB
+        title_record = db.query(models.Title).filter(
+            models.Title.name == title_data.name
+        ).first()
 
-    if title_record:
-        raise HTTPException(status_code=400, detail="That title already exists")
+        if title_record:
+            raise HTTPException(status_code=400, detail="That title already exists")
 
-    new_title = models.Title(
-        name=title_data.name,
-        description=title_data.description,
-        genre=title_data.genre
-    )
+        new_title = models.Title(
+            name=title_data.name,
+            description=title_data.description,
+            genre=title_data.genre
+        )
 
-    db.add(new_title)
-    db.commit()
-    db.refresh(new_title)
+        db.add(new_title)
+        db.commit()
+        db.refresh(new_title)
+    except Exception:
+        # release the 'processing' reservation so a retry with the same key isn't locked out
+        if idempotency_key:
+            redis_client.delete(idempotency_key)
+        raise
 
     if idempotency_key:
 
@@ -85,49 +91,55 @@ def create_book_copies(
         if cached_result:
             return cached_result
 
-    # Verify the title exists
-    title = db.query(models.Title).filter(models.Title.title_id == title_id).first()
-    if not title:
-        raise HTTPException(status_code=404, detail="Title not found")
+    try:
+        # Verify the title exists
+        title = db.query(models.Title).filter(models.Title.title_id == title_id).first()
+        if not title:
+            raise HTTPException(status_code=404, detail="Title not found")
 
-    # 2. Save Book metadata (Assuming you have a Book model linked to Title)
-    # If author and number_of_pages are just fields on the Title model,
-    # you would update the Title object here instead.
-    new_book = models.Book(
-        title_id=title_id,
-        author=book_data.author,
-        number_of_pages=book_data.number_of_pages,
-    )
-    db.add(new_book)
-    db.commit()
-    db.refresh(new_book)
-
-    # 3. Create the specified number of Item copies
-    created_items = []
-    for _ in range(book_data.number_of_copies):
-        # Generate a serial number. If your DB auto-increments this,
-        # you can omit it and retrieve it after db.commit()
-        new_serial = str(uuid.uuid4())
-
-        new_library_item = models.LibraryItem(
-            serial_no=new_serial,
-            format_id=new_book.format_id,
+        # 2. Save Book metadata (Assuming you have a Book model linked to Title)
+        # If author and number_of_pages are just fields on the Title model,
+        # you would update the Title object here instead.
+        new_book = models.Book(
+            title_id=title_id,
+            author=book_data.author,
+            number_of_pages=book_data.number_of_pages,
         )
-        db.add(new_library_item)
-        created_items.append(new_library_item)
-    # 4. Commit all changes to the database at once
-    db.commit()
+        db.add(new_book)
+        db.commit()
+        db.refresh(new_book)
 
-    # 5. Extract the serial numbers from the created items
-    serial_numbers = [library_item.serial_no for library_item in created_items]
+        # 3. Create the specified number of Item copies
+        created_items = []
+        for _ in range(book_data.number_of_copies):
+            # Generate a serial number. If your DB auto-increments this,
+            # you can omit it and retrieve it after db.commit()
+            new_serial = str(uuid.uuid4())
 
-    response_data = schemas.BookResponse(
-        title_id=title_id,
-        format_id=new_book.format_id,
-        author=book_data.author,
-        number_of_pages=book_data.number_of_pages,
-        created_serial_numbers=serial_numbers
-    )
+            new_library_item = models.LibraryItem(
+                serial_no=new_serial,
+                format_id=new_book.format_id,
+            )
+            db.add(new_library_item)
+            created_items.append(new_library_item)
+        # 4. Commit all changes to the database at once
+        db.commit()
+
+        # 5. Extract the serial numbers from the created items
+        serial_numbers = [library_item.serial_no for library_item in created_items]
+
+        response_data = schemas.BookResponse(
+            title_id=title_id,
+            format_id=new_book.format_id,
+            author=book_data.author,
+            number_of_pages=book_data.number_of_pages,
+            created_serial_numbers=serial_numbers
+        )
+    except Exception:
+        # release the 'processing' reservation so a retry with the same key isn't locked out
+        if idempotency_key:
+            redis_client.delete(idempotency_key)
+        raise
 
     if idempotency_key:
         redis_client.set(idempotency_key, response_data.model_dump_json(), ex=86400)
@@ -148,49 +160,55 @@ def create_movie_copies(
         if cached_result:
             return cached_result
 
-    # Verify the title exists
-    title = db.query(models.Title).filter(models.Title.title_id == title_id).first()
-    if not title:
-        raise HTTPException(status_code=404, detail="Title not found")
+    try:
+        # Verify the title exists
+        title = db.query(models.Title).filter(models.Title.title_id == title_id).first()
+        if not title:
+            raise HTTPException(status_code=404, detail="Title not found")
 
-    # 2. Save Book metadata (Assuming you have a Book model linked to Title)
-    # If author and number_of_pages are just fields on the Title model,
-    # you would update the Title object here instead.
-    new_movie = models.Movie(
-        title_id=title_id,
-        director=movie_data.director,
-        runtime=movie_data.runtime
-    )
-    db.add(new_movie)
-    db.commit()
-    db.refresh(new_movie)
-
-    # 3. Create the specified number of Item copies
-    created_items = []
-    for _ in range(movie_data.number_of_copies):
-        # Generate a serial number. If your DB auto-increments this,
-        # you can omit it and retrieve it after db.commit()
-        new_serial = str(uuid.uuid4())
-
-        new_library_item = models.LibraryItem(
-            serial_no=new_serial,
-            format_id=new_movie.format_id,
+        # 2. Save Book metadata (Assuming you have a Book model linked to Title)
+        # If author and number_of_pages are just fields on the Title model,
+        # you would update the Title object here instead.
+        new_movie = models.Movie(
+            title_id=title_id,
+            director=movie_data.director,
+            runtime=movie_data.runtime
         )
-        db.add(new_library_item)
-        created_items.append(new_library_item)
-    # 4. Commit all changes to the database at once
-    db.commit()
+        db.add(new_movie)
+        db.commit()
+        db.refresh(new_movie)
 
-    # 5. Extract the serial numbers from the created items
-    serial_numbers = [library_item.serial_no for library_item in created_items]
+        # 3. Create the specified number of Item copies
+        created_items = []
+        for _ in range(movie_data.number_of_copies):
+            # Generate a serial number. If your DB auto-increments this,
+            # you can omit it and retrieve it after db.commit()
+            new_serial = str(uuid.uuid4())
 
-    response_data = schemas.MovieResponse(
-        title_id=title_id,
-        format_id=new_movie.format_id,
-        director=new_movie.director,
-        runtime=new_movie.runtime,
-        created_serial_numbers=serial_numbers
-    )
+            new_library_item = models.LibraryItem(
+                serial_no=new_serial,
+                format_id=new_movie.format_id,
+            )
+            db.add(new_library_item)
+            created_items.append(new_library_item)
+        # 4. Commit all changes to the database at once
+        db.commit()
+
+        # 5. Extract the serial numbers from the created items
+        serial_numbers = [library_item.serial_no for library_item in created_items]
+
+        response_data = schemas.MovieResponse(
+            title_id=title_id,
+            format_id=new_movie.format_id,
+            director=new_movie.director,
+            runtime=new_movie.runtime,
+            created_serial_numbers=serial_numbers
+        )
+    except Exception:
+        # release the 'processing' reservation so a retry with the same key isn't locked out
+        if idempotency_key:
+            redis_client.delete(idempotency_key)
+        raise
 
     if idempotency_key:
         redis_client.set(idempotency_key, response_data.model_dump_json(), ex=86400)
@@ -211,49 +229,55 @@ def create_audiobook_copies(
         if cached_result:
             return cached_result
 
-    # Verify the title exists
-    title = db.query(models.Title).filter(models.Title.title_id == title_id).first()
-    if not title:
-        raise HTTPException(status_code=404, detail="Title not found")
+    try:
+        # Verify the title exists
+        title = db.query(models.Title).filter(models.Title.title_id == title_id).first()
+        if not title:
+            raise HTTPException(status_code=404, detail="Title not found")
 
-    # 2. Save Book metadata (Assuming you have a Book model linked to Title)
-    # If author and number_of_pages are just fields on the Title model,
-    # you would update the Title object here instead.
-    new_audiobook = models.Audiobook(
-        title_id=title_id,
-        narrator=audiobook_data.narrator,
-        runtime=audiobook_data.runtime,
-    )
-    db.add(new_audiobook)
-    db.commit()
-    db.refresh(new_audiobook)
-
-    # 3. Create the specified number of Item copies
-    created_items = []
-    for _ in range(audiobook_data.number_of_copies):
-        # Generate a serial number. If your DB auto-increments this,
-        # you can omit it and retrieve it after db.commit()
-        new_serial = str(uuid.uuid4())
-
-        new_library_item = models.LibraryItem(
-            serial_no=new_serial,
-            format_id=new_audiobook.format_id,
+        # 2. Save Book metadata (Assuming you have a Book model linked to Title)
+        # If author and number_of_pages are just fields on the Title model,
+        # you would update the Title object here instead.
+        new_audiobook = models.Audiobook(
+            title_id=title_id,
+            narrator=audiobook_data.narrator,
+            runtime=audiobook_data.runtime,
         )
-        db.add(new_library_item)
-        created_items.append(new_library_item)
-    # 4. Commit all changes to the database at once
-    db.commit()
+        db.add(new_audiobook)
+        db.commit()
+        db.refresh(new_audiobook)
 
-    # 5. Extract the serial numbers from the created items
-    serial_numbers = [library_item.serial_no for library_item in created_items]
+        # 3. Create the specified number of Item copies
+        created_items = []
+        for _ in range(audiobook_data.number_of_copies):
+            # Generate a serial number. If your DB auto-increments this,
+            # you can omit it and retrieve it after db.commit()
+            new_serial = str(uuid.uuid4())
 
-    response_data = schemas.AudioBookResponse(
-        title_id=title_id,
-        format_id=new_audiobook.format_id,
-        narrator=new_audiobook.narrator,
-        runtime=new_audiobook.runtime,
-        created_serial_numbers=serial_numbers
-    )
+            new_library_item = models.LibraryItem(
+                serial_no=new_serial,
+                format_id=new_audiobook.format_id,
+            )
+            db.add(new_library_item)
+            created_items.append(new_library_item)
+        # 4. Commit all changes to the database at once
+        db.commit()
+
+        # 5. Extract the serial numbers from the created items
+        serial_numbers = [library_item.serial_no for library_item in created_items]
+
+        response_data = schemas.AudioBookResponse(
+            title_id=title_id,
+            format_id=new_audiobook.format_id,
+            narrator=new_audiobook.narrator,
+            runtime=new_audiobook.runtime,
+            created_serial_numbers=serial_numbers
+        )
+    except Exception:
+        # release the 'processing' reservation so a retry with the same key isn't locked out
+        if idempotency_key:
+            redis_client.delete(idempotency_key)
+        raise
 
     if idempotency_key:
         redis_client.set(idempotency_key, response_data.model_dump_json(), ex=86400)

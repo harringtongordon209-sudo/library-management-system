@@ -2,7 +2,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, select
 from typing import List, Optional
 import json
 
@@ -25,9 +25,8 @@ def get_format_items(format_id: str, db: Session = Depends(get_db)):
 
     # 2. Get items for format which are not checked out already (i.e., due_date is None in CheckoutRecord)
     checked_out_subquery = (
-        db.query(models.CheckoutRecord.item_serial_no)
-        .filter(models.CheckoutRecord.return_date.is_(None))
-        .subquery()
+        select(models.CheckoutRecord.item_serial_no)
+        .where(models.CheckoutRecord.return_date.is_(None))
     )
 
     available_items = (

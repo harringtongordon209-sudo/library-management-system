@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import date, time # <-- New import for handling checkout dates
 
@@ -13,16 +13,14 @@ class TitleCreate(BaseModel):
 class TitleResponse(TitleCreate):
     title_id: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TitleSummary(BaseModel):
     title_id: str
     name: str
     genre: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TitleDetails(BaseModel):
     title_id: str
@@ -31,8 +29,7 @@ class TitleDetails(BaseModel):
     genre: str
     totalNoOfItems: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # -------------------------------------
 # 2. FORMAT SCHEMAS (Example: Book)
@@ -51,8 +48,7 @@ class BookResponse(BaseModel):
     number_of_pages: int
     created_serial_numbers: List[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieCreate(BaseModel):
@@ -67,8 +63,7 @@ class MovieResponse(BaseModel):
     runtime: int
     created_serial_numbers: List[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AudioBookCreate(BaseModel):
     narrator: str
@@ -82,8 +77,7 @@ class AudioBookResponse(BaseModel):
     runtime: int
     created_serial_numbers: List[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # -------------------------------------
 # 3. LIBRARY ITEM SCHEMAS
@@ -93,8 +87,7 @@ class LibraryItemCreate(BaseModel):
     format_id: str # Links it to a specific book, movie, etc.
 
 class LibraryItemResponse(LibraryItemCreate):
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # -------------------------------------
 # 4. BORROWER SCHEMAS
@@ -105,8 +98,7 @@ class BorrowerCreate(BaseModel):
 class BorrowerResponse(BorrowerCreate):
     borrower_id: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # -------------------------------------
 # 5. CHECKOUT RECORD SCHEMAS
@@ -124,8 +116,7 @@ class CheckoutResponse(BaseModel):
     due_date: date
     return_date: Optional[date] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # -------------------------------------
 # 6. CHECKIN RECORD SCHEMAS
@@ -139,8 +130,7 @@ class CheckinResponse(BaseModel):
     due_date: date
     return_date: date
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- NEW CHECKOUT REQUEST SCHEMAS ---
 class ItemReference(BaseModel):
@@ -173,27 +163,23 @@ class TitleDetailResponse(BaseModel):
     genre: str | None = None
     formats: List[FormatCount]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class FormatInfo(BaseModel):
     format_id: str
     format_type: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TitleFormatResponse(BaseModel):
     title_id: str
     name: str
     format_types: List[FormatInfo]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class FormatItemsResponse(BaseModel):
     format_id: str
     items: List[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
