@@ -24,11 +24,17 @@ def create_borrower(borrower_data: schemas.BorrowerCreate, db: Session = Depends
         if not is_new:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Request is currently processing")
 
-    new_borrower = models.Borrower(name=borrower_data.name)
+    try:
+        new_borrower = models.Borrower(name=borrower_data.name)
 
-    db.add(new_borrower)
-    db.commit()
-    db.refresh(new_borrower)
+        db.add(new_borrower)
+        db.commit()
+        db.refresh(new_borrower)
+    except Exception:
+        # release the 'processing' reservation so a retry with the same key isn't locked out
+        if idempotency_key:
+            redis_client.delete(idempotency_key)
+        raise
 
     if idempotency_key:
         response_data = {
@@ -115,63 +121,92 @@ def checkout_item_nested(
         if not is_new:
             raise HTTPException(status_code=409, detail="Request is processing")
 
-    borrower_record = db.query(models.Borrower).filter(
-        models.Borrower.borrower_id == borrower_id
-    ).first()
-    print(borrower_record)
-    if not borrower_record:
-        raise HTTPException(status_code=400, detail="Borrower does not exist!")
+    try:
+        borrower_record = db.query(models.Borrower).filter(
+            models.Borrower.borrower_id == borrower_id
+        ).first()
+        print(borrower_record)
+        if not borrower_record:
+            raise HTTPException(status_code=400, detail="Borrower does not exist!")
 
-    # 2. Extract the item ID from the nested request body
-    item_id = checkout_data.item.id
+        # 2. Extract the item ID from the nested request body
+        item_id = checkout_data.item.id
 
-    # 3. Check if the item is already checked out
-    active_checkout = db.query(models.CheckoutRecord).filter(
-        models.CheckoutRecord.item_serial_no == item_id,
-        models.CheckoutRecord.return_date == None
-    ).first()
-    print("got here")
+        # 3. Check if the item is already checked out
+        active_checkout = db.query(models.CheckoutRecord).filter(
+            models.CheckoutRecord.item_serial_no == item_id,
+            models.CheckoutRecord.return_date == None
+        ).first()
+        print("got here")
 
-    if active_checkout:
-        raise HTTPException(status_code=400, detail="Item is already checked out!")
+        if active_checkout:
+            raise HTTPException(status_code=400, detail="Item is already checked out!")
 
-    # 4. Fetch the library item to get its Title Name for the response
-    library_item = db.query(models.LibraryItem).filter(models.LibraryItem.serial_no == item_id).first()
-    if not library_item:
-        raise HTTPException(status_code=404, detail="Item not found")
+        # 4. Fetch the library item to get its Title Name for the response
+        library_item = db.query(models.LibraryItem).filter(models.LibraryItem.serial_no == item_id).first()
+        if not library_item:
+            raise HTTPException(status_code=404, detail="Item not found")
 
-    # 5. Calculate dates (Your example response showed a 7-day checkout period)
-    start_date = date.today()
-    due_date = start_date + timedelta(days=7)
+        # 5. Calculate dates (Your example response showed a 7-day checkout period)
+        start_date = date.today()
+        due_date = start_date + timedelta(days=7)
 
-    # 6. Create the Database Record
-    new_checkout = models.CheckoutRecord(
-        item_serial_no=item_id,
-        borrower_id=borrower_id,
-        check_out_date=start_date,
-        due_date=due_date
-    )
-    db.add(new_checkout)
-    db.commit()
-    db.refresh(new_checkout)
+        # 6. Create the Database Record
+        new_checkout = models.CheckoutRecord(
+            item_serial_no=item_id,
+            borrower_id=borrower_id,
+            check_out_date=start_date,
+            due_date=due_date
+        )
+        db.add(new_checkout)
+        db.commit()
+        db.refresh(new_checkout)
 
-    # 7. Construct the exact nested response you requested
-    response_data = {
-        "checkout_id": new_checkout.checkout_id,
-        "startDate": new_checkout.check_out_date.isoformat(),
-        "dueDate": new_checkout.due_date.isoformat(),
-        "item": {
-            "id": library_item.format_id,  # Linking the format ID
-            "name": library_item.format.title.name,  # Using SQLAlchemy relationships to get the name
-            "barcode": library_item.serial_no
+        # 7. Construct the exact nested response you requested
+        response_data = {
+            "checkout_id": new_checkout.checkout_id,
+            "startDate": new_checkout.check_out_date.isoformat(),
+            "dueDate": new_checkout.due_date.isoformat(),
+            "item": {
+                "id": library_item.format_id,  # Linking the format ID
+                "name": library_item.format.title.name,  # Using SQLAlchemy relationships to get the name
+                "barcode": library_item.serial_no
+            }
         }
-    }
+    except Exception:
+        # release the 'processing' reservation so a retry with the same key isn't locked out
+        if idempotency_key:
+            redis_client.delete(idempotency_key)
+        raise
 
     # 8. Cache the final result in Redis
     if idempotency_key:
         redis_client.set(idempotency_key, json.dumps(response_data), ex=86400)
 
     return response_data
+
+@router.delete("/{borrower_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_borrower(borrower_id: str, db: Session = Depends(get_db)):
+    borrower_record = db.query(models.Borrower).filter(
+        models.Borrower.borrower_id == borrower_id
+    ).first()
+
+    if not borrower_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Borrower does not exist!")
+
+    has_checkout_history = db.query(models.CheckoutRecord).filter(
+        models.CheckoutRecord.borrower_id == borrower_id
+    ).first()
+
+    if has_checkout_history:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete borrower with existing checkout records"
+        )
+
+    db.delete(borrower_record)
+    db.commit()
+
 
 @router.get("/{borrower_id}/checkoutRecords", response_model=List[schemas.CheckoutNestedResponse], status_code=status.HTTP_200_OK)
 def get_borrower_checkout_records(borrower_id: str, db: Session = Depends(get_db)):
